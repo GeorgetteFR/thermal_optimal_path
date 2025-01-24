@@ -33,7 +33,7 @@ def standardize(column):
 
 def plot_lead_lag(df_avg):
     plt.figure(figsize=(10, 6))
-    plt.plot(df_avg[::2]) 
+    plt.plot(df_avg) 
     plt.title("Average Path Between Open Prices and Volume")
     plt.xlabel("Index")
     plt.ylabel("Average Path Value")
