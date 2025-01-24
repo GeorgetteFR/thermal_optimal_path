@@ -25,6 +25,8 @@ def load_parquet(file_path):
     data["Open time"] = pd.to_datetime(data["Open time"], unit='ms')
     data["Close time"] = pd.to_datetime(data["Close time"], unit='ms')
 
+    data = data[["Open time", "Open",]]
+
     return data
 
 def standardize(column):
