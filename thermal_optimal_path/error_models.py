@@ -11,7 +11,7 @@ def _sign_error(a, b, sign, sqrt):
 
 
 @jit
-def error(a, b, sqrt=False, both_signs=True):
+def error(a, b, sqrt=False, both_signs=False):
     """ Basic mean squared error model.
 
     Parameters

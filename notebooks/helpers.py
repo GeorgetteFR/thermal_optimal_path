@@ -1,6 +1,6 @@
-import polars as pl
+import numpy as np
+import pandas as pd  
 import matplotlib.pyplot as plt
-import polars as pl
 
 def load_parquet(file_path):
     new_columns = [
@@ -18,24 +18,22 @@ def load_parquet(file_path):
         "Ignore"
     ]
 
-    data = pl.scan_parquet(file_path)
-    data = data.rename({str(i): name for i, name in enumerate(new_columns)})
+    data = pd.read_parquet(file_path)
 
-    data = data.with_columns([
-        (pl.col("Open time")).cast(pl.Datetime('ms')),  
-        (pl.col("Close time")).cast(pl.Datetime('ms'))  
-    ])
+    data.columns = new_columns[:len(data.columns)]
+
+    data["Open time"] = pd.to_datetime(data["Open time"], unit='ms')
+    data["Close time"] = pd.to_datetime(data["Close time"], unit='ms')
 
     return data
 
 def standardize(column):
-    return (column - column.mean()) / column.std()
+    column = np.array(column)
+    return (column - np.mean(column)) / np.std(column)
 
 def plot_lead_lag(df_avg):
-    avg_values = df_avg["avg"].to_numpy()
-
     plt.figure(figsize=(10, 6))
-    plt.plot(avg_values[::2])  # Plot every second point
+    plt.plot(df_avg[::2]) 
     plt.title("Average Path Between Open Prices and Volume")
     plt.xlabel("Index")
     plt.ylabel("Average Path Value")
