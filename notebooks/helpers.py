@@ -33,6 +33,24 @@ def standardize(column):
     column = np.array(column)
     return (column - np.mean(column)) / np.std(column)
 
+
+def rolling_standardize(column, window=60):
+    """
+    Perform a rolling standardization on the given column using Pandas.
+    
+    Parameters:
+        column (array-like): The input column to standardize (1D array or list).
+        window (int): The rolling window size in seconds.
+        
+    Returns:
+        pd.Series: A Pandas Series of rolling standardized values.
+    """
+    column = pd.Series(column)
+    rolling_mean = column.rolling(window=window, min_periods=window).mean()
+    rolling_std = column.rolling(window=window, min_periods=window).std()
+    return (column - rolling_mean) / rolling_std
+
+
 def plot_lead_lag(df_avg):
     plt.figure(figsize=(10, 6))
     plt.plot(df_avg) 
