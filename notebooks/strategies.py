@@ -1,88 +1,125 @@
 import numpy as np
+import pandas as pd
+from helpers_strat import *
 
-def sell_if_price_changed(total_money, entry_price, current_price, variation):
-    ratio = current_price / entry_price
-    if abs(ratio - 1) >= variation:
-        total_money += ratio
-        entry_price = 0 
-    return total_money, entry_price
-
-
-def basic_strategy(btc_prices, btc_returns, eth_prices, eth_returns, df_avg):
-    threshold = 10 * 40/60
-    per_5_btc = np.percentile(btc_returns, 5)
-    per_95_btc = np.percentile(btc_returns, 95)
-    per_25_btc = np.percentile(btc_returns, 25)
-    per_75_btc = np.percentile(btc_returns, 75)
-
-    per_5_eth = np.percentile(eth_returns, 5)
-    per_95_eth = np.percentile(eth_returns, 95)
-    per_25_eth = np.percentile(eth_returns, 25)
-    per_75_eth = np.percentile(eth_returns, 75)
-
+def basic_strategy(crypto1_prices, crypto1_returns, crypto2_prices, crypto2_returns, df_avg, minute=60):
     total_money = 0
+    threshold = 6.67
 
-    eth_price_entry_long = 0
-    btc_price_entry_long = 0
-    eth_price_entry_short = 0
-    btc_price_entry_short = 0
-    for i in range(len(btc_prices)):
-        eth_price = eth_prices.iloc[i]
-        btc_price = btc_prices.iloc[i]
+    per_5_crypto1, per_95_crypto1, per_25_crypto1, per_75_crypto1, per_5_crypto2, per_95_crypto2, per_25_crypto2, per_75_crypto2 = get_percentiles(crypto1_returns, crypto2_returns)
+    crypto1_entry_price_long, crypto2_entry_price_long, crypto1_entry_price_short, crypto2_entry_price_short = 0, 0, 0, 0
+    crypto1_long_timer, crypto2_long_timer, crypto1_short_timer, crypto2_short_timer = -1, -1, -1, -1
 
-        eth_flat = eth_returns.iloc[i] < per_75_eth and eth_returns.iloc[i] > per_25_eth
-        btc_flat = btc_returns.iloc[i] < per_75_btc and btc_returns.iloc[i] > per_25_btc
+    daily_long_trades = 0
+    daily_short_trades = 0
+    daily_long_returns = 0
+    daily_short_returns = 0
 
-        eth_grew = eth_returns.iloc[i] > per_95_eth
-        btc_grew = btc_returns.iloc[i] > per_95_btc
+    for i in range(len(crypto1_prices)):
 
-        eth_fell = eth_returns.iloc[i] < per_5_eth
-        btc_fell = btc_returns.iloc[i] < per_5_btc
+        crypto2_price = crypto2_prices.iloc[i]
+        crypto1_price = crypto1_prices.iloc[i]
 
-        # Long strategy
-        if eth_price_entry_long > 0:
-            total_money, eth_price_entry_long = sell_if_price_changed(total_money, eth_price_entry_long, eth_price, per_95_eth)
+        crypto2_flat, crypto1_flat, crypto2_grew, crypto1_grew, crypto2_fell, crypto1_fell = get_booleans(crypto2_returns.iloc[i], crypto1_returns.iloc[i], per_5_crypto2, per_95_crypto2, per_25_crypto2, per_75_crypto2, per_5_crypto1, per_95_crypto1, per_25_crypto1, per_75_crypto1)
+        
 
-        if eth_price_entry_long == 0 and df_avg[i] > threshold and btc_grew and eth_flat:
-            eth_price_entry_long = eth_price
-            total_money -= 1 
-            # print(f"Long ETH, price: {eth_price}, total money: {total_money}, i: {i}")
+        # Long management ETH against BTC
+        total_money, crypto2_entry_price_long, took_trade = long_if_lag_and_grew(total_money, df_avg[i], threshold, crypto1_grew, crypto2_flat, crypto2_entry_price_long, crypto2_price)
+        if took_trade:
+            daily_long_trades += 1
+            daily_long_returns -= 1
+            crypto2_long_timer = 0
 
-        if btc_price_entry_long > 0:
-            ratio = btc_price / btc_price_entry_long
-            if abs(ratio - 1) >= per_95_btc:
-                total_money += ratio
-                # print(f"Sold BTC at price: {btc_price}, total money: {total_money}, i: {i}")
-                btc_price_entry_long = 0 
 
-        if btc_price_entry_long == 0 and df_avg[i] < -threshold and eth_grew and btc_flat:
-            btc_price_entry_long = btc_price
-            total_money -= 1  
-            # print(f"Long BTC, price: {btc_price}, total money: {total_money}, i: {i}")
+        if crypto2_long_timer >= minute:
+            ratio = crypto2_price / crypto2_entry_price_long
+            total_money += ratio
+            crypto2_entry_price_long = 0 
+            crypto2_long_timer = -1
+            print("BLABLABA")
+        if crypto2_entry_price_long > 0:
+            prev_total_money = total_money
+            total_money, crypto2_entry_price_long = sell_if_price_changed(total_money, crypto2_entry_price_long, crypto2_price, per_95_crypto2)
+            if total_money != prev_total_money:
+                daily_long_returns += total_money - prev_total_money
+                crypto2_long_timer = -1
+            else:
+                crypto2_long_timer += 1
 
-        # Short strategy
-        if eth_price_entry_short > 0:
-            ratio = eth_price / eth_price_entry_short
-            if abs(ratio - 1) >= per_95_eth:
-                total_money -= ratio
-                # print(f"Bought back ETH at price: {eth_price}, total money: {total_money}, i: {i}")
-                eth_price_entry_short = 0  
+        #Long management BTC against ETH
+        total_money, crypto1_entry_price_long, took_trade = long_if_lag_and_grew(total_money, -df_avg[i], threshold, crypto2_grew, crypto1_flat, crypto1_entry_price_long, crypto1_price)
+        if took_trade:
+            daily_long_trades += 1
+            daily_long_returns -= 1
+            crypto1_long_timer = 0
 
-        if eth_price_entry_short == 0 and df_avg[i] > threshold and btc_fell and eth_flat:
-            eth_price_entry_short = eth_price
-            total_money += 1  
-            # print(f"Short ETH, price: {eth_price}, total money: {total_money}, i: {i}")
+        if crypto1_long_timer >= minute:
+            ratio = crypto1_price / crypto1_entry_price_long
+            total_money += ratio
+            crypto1_entry_price_long = 0 
+            crypto1_long_timer = -1
+            print("BLABLABA")
+        if crypto1_entry_price_long > 0:
+            prev_total_money = total_money
+            total_money, crypto1_entry_price_long = sell_if_price_changed(total_money, crypto1_entry_price_long, crypto1_price, per_95_crypto1)
+            if total_money != prev_total_money:
+                daily_long_returns += total_money - prev_total_money
+                crypto1_long_timer = -1
+            else:
+                crypto1_long_timer += 1
+        
+        # Short management ETH against BTC
+        total_money, crypto2_entry_price_short, took_trade = short_if_lag_and_fell(total_money, df_avg[i], threshold, crypto1_fell, crypto2_flat, crypto2_entry_price_short, crypto2_price)
+        if took_trade:
+            daily_short_trades += 1
+            daily_short_returns += 1
+            crypto2_short_timer = 0
 
-        if btc_price_entry_short > 0:
-            ratio = btc_price / btc_price_entry_short
-            if abs(ratio - 1) >= per_95_btc:
-                total_money -= ratio
-                # print(f"Bought back BTC at price: {btc_price}, total money: {total_money}, i: {i}")
-                btc_price_entry_short = 0 
+        if crypto2_short_timer >= minute:
+            ratio = crypto2_price / crypto2_entry_price_short
+            total_money -= ratio
+            crypto2_entry_price_short = 0 
+            crypto2_short_timer = -1
+            print("BLABLABA")
+        if crypto2_entry_price_short > 0:
+            prev_total_money = total_money
+            total_money, crypto2_entry_price_short = buy_back_if_price_changed(total_money, crypto2_entry_price_short, crypto2_price, per_95_crypto2)
+            if total_money != prev_total_money:
+                daily_short_returns += total_money - prev_total_money
+                crypto2_short_timer = -1
+            else:
+                crypto2_short_timer += 1
 
-        if btc_price_entry_short == 0 and df_avg[i] < -threshold and eth_fell and btc_flat:
-            btc_price_entry_short = btc_price
-            total_money += 1  
-            # print(f"Short BTC, price: {btc_price}, total money: {total_money}, i: {i}")
+        # Short management BTC against ETH
+        total_money, crypto1_entry_price_short, took_trade = short_if_lag_and_fell(total_money, -df_avg[i], threshold, crypto2_fell, crypto1_flat, crypto1_entry_price_short, crypto1_price)
+        if took_trade:
+            daily_short_trades += 1
+            daily_short_returns += 1
+            crypto1_short_timer = 0
 
-    print(f"Total money after strategy: Base amount + {total_money}")
+        if crypto1_short_timer >= minute:
+            ratio = crypto1_price / crypto1_entry_price_short
+            total_money -= ratio
+            crypto1_entry_price_short = 0 
+            crypto1_short_timer = -1
+            print("BLABLABA")
+        if crypto1_entry_price_short > 0:
+            prev_total_money = total_money
+            total_money, crypto1_entry_price_short = buy_back_if_price_changed(total_money, crypto1_entry_price_short, crypto1_price, per_95_crypto1)
+            if total_money != prev_total_money:
+                daily_short_returns += total_money - prev_total_money
+                crypto1_short_timer = -1
+            else:
+                crypto1_short_timer += 1
+
+    daily_data = {
+        'Daily Returns': total_money,
+        'Long Trades': daily_long_trades,
+        'Short Trades': daily_short_trades,
+        'Long Returns': daily_long_returns,
+        'Short Returns': daily_short_returns
+    }
+    df = pd.DataFrame([daily_data])
+    df.to_csv('daily_returns.csv', mode='a', header=False, index=False)
+    
+    print(f"Total money after strategy: Base amount + {total_money}, Long trades: {daily_long_trades}, Short trades: {daily_short_trades}, Long returns: {daily_long_returns}, Short returns: {daily_short_returns}")
