@@ -59,7 +59,7 @@ def rolling_std(values, window=5):
     return result
 
 @njit
-def rolling_standardize_numba(column, window=40):
+def rolling_standardize_numba(column, window=3600):
     """
     Perform a rolling standardization on the given column using Numba.
     """
