@@ -2,15 +2,16 @@ import numpy as np
 from numba import jit
 
 from thermal_optimal_path.error_models import error
+
 from numba import njit, prange
 
-@njit(parallel=True)
-def _partition_function_optimized(series_a, series_b, temperature, error_func):
+@njit
+def _partition_function_with_precomputed_lattice(series_a, series_b, temperature, lattice, error_func):
     size_a = len(series_a)
     size_b = len(series_b)
 
     if size_a != size_b:
-        raise NotImplementedError('Only series of same lengths are supported.')
+        raise NotImplementedError("Only series of the same lengths are supported.")
 
     g = np.empty((size_a, size_b))
     g.fill(np.nan)
@@ -22,14 +23,16 @@ def _partition_function_optimized(series_a, series_b, temperature, error_func):
     g[0, 1] = 1
     g[1, 0] = 1
 
-    for x, t, t_a, t_b in iter_lattice(size_a):
+    # Use the precomputed lattice
+    for x, t, t_a, t_b in lattice:
         g_sum = g[t_a, t_b - 1] + g[t_a - 1, t_b] + g[t_a - 1, t_b - 1]
         err = error_func(series_a[t_a], series_b[t_b])
         g[t_a, t_b] = g_sum * np.exp(-err / temperature)
 
     return g
 
-def partition_function_optimized(series_a, series_b, temperature, error_func=None):
+
+def partition_function_precomp(series_a, series_b, temperature, lattice, error_func=None):
     """ Computed the partition function given two time series and the temperature parameter.
 
     Parameters
@@ -51,7 +54,26 @@ def partition_function_optimized(series_a, series_b, temperature, error_func=Non
     """
     if not error_func:
         error_func = error
-    return _partition_function_optimized(series_a, series_b, temperature, error_func)
+    return _partition_function_with_precomputed_lattice(series_a, series_b, temperature, lattice, error_func)
+
+@jit
+def precompute_lattice(n, exclude_boundary=True):
+    """
+    Precompute lattice points and return them as a NumPy array.
+    """
+    results = []
+    start_time = 1 if exclude_boundary else 0
+    for t in range(start_time, 2 * n):
+        offset = 1 if exclude_boundary else 0
+        start = max(t - 2 * n + 1, -t + offset)
+        end = min(2 * n - t - 1, t - offset)
+        if (start + t) % 2:
+            start += 1
+        for x in range(start, end + 1, 2):
+            t_a = (t - x) // 2
+            t_b = (t + x) // 2
+            results.append((x, t, t_a, t_b))
+    return np.array(results)
 
 @jit
 def iter_lattice(n, exclude_boundary=True):
