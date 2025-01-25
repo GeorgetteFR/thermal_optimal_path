@@ -1,5 +1,13 @@
 import numpy as np
 
+def sell_if_price_changed(total_money, entry_price, current_price, variation):
+    ratio = current_price / entry_price
+    if abs(ratio - 1) >= variation:
+        total_money += ratio
+        entry_price = 0 
+    return total_money, entry_price
+
+
 def basic_strategy(btc_prices, btc_returns, eth_prices, eth_returns, df_avg):
     threshold = 10 * 40/60
     per_5_btc = np.percentile(btc_returns, 5)
@@ -33,11 +41,7 @@ def basic_strategy(btc_prices, btc_returns, eth_prices, eth_returns, df_avg):
 
         # Long strategy
         if eth_price_entry_long > 0:
-            ratio = eth_price / eth_price_entry_long
-            if abs(ratio - 1) >= per_95_eth:
-                total_money += ratio
-                # print(f"Sold ETH at price: {eth_price}, total money: {total_money}, i: {i}")
-                eth_price_entry_long = 0  
+            total_money, eth_price_entry_long = sell_if_price_changed(total_money, eth_price_entry_long, eth_price, per_95_eth)
 
         if eth_price_entry_long == 0 and df_avg[i] > threshold and btc_grew and eth_flat:
             eth_price_entry_long = eth_price

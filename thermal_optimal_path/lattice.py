@@ -2,7 +2,56 @@ import numpy as np
 from numba import jit
 
 from thermal_optimal_path.error_models import error
+from numba import njit, prange
 
+@njit(parallel=True)
+def _partition_function_optimized(series_a, series_b, temperature, error_func):
+    size_a = len(series_a)
+    size_b = len(series_b)
+
+    if size_a != size_b:
+        raise NotImplementedError('Only series of same lengths are supported.')
+
+    g = np.empty((size_a, size_b))
+    g.fill(np.nan)
+
+    # Boundary conditions
+    g[0, :] = 0
+    g[:, 0] = 0
+    g[0, 0] = 1
+    g[0, 1] = 1
+    g[1, 0] = 1
+
+    for x, t, t_a, t_b in iter_lattice(size_a):
+        g_sum = g[t_a, t_b - 1] + g[t_a - 1, t_b] + g[t_a - 1, t_b - 1]
+        err = error_func(series_a[t_a], series_b[t_b])
+        g[t_a, t_b] = g_sum * np.exp(-err / temperature)
+
+    return g
+
+def partition_function_optimized(series_a, series_b, temperature, error_func=None):
+    """ Computed the partition function given two time series and the temperature parameter.
+
+    Parameters
+    ----------
+    series_a: array like
+        The first series
+    series_b: array like
+        The second series
+    temperature: positive number
+        The temperature smoothing parameter. The higher the temperature, the more errors are
+        discarded.
+    error_func: function, optional
+        Function returning the error given two floats. The first arg comes from series_a,
+        the second from series_b. If not provided, uses a default error model.
+
+    Returns
+    -------
+    A Numpy 2D array for the computed partition function.
+    """
+    if not error_func:
+        error_func = error
+    return _partition_function_optimized(series_a, series_b, temperature, error_func)
 
 @jit
 def iter_lattice(n, exclude_boundary=True):

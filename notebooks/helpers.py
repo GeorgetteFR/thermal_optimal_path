@@ -1,6 +1,8 @@
 import numpy as np
 import pandas as pd  
 import matplotlib.pyplot as plt
+from numba import njit
+
 
 def load_parquet(file_path):
     new_columns = [
@@ -33,7 +35,61 @@ def standardize(column):
     column = np.array(column)
     return (column - np.mean(column)) / np.std(column)
 
-def rolling_standardize(column, window=60):
+@njit
+def rolling_std(values, window=5):
+    """
+    Compute a rolling standard deviation for a 1D array.
+    """
+    result = np.empty(len(values))
+    rolling_sum = 0.0
+    rolling_sum_sq = 0.0
+
+    for i in range(len(values)):
+        if i < window:
+            rolling_sum += values[i]
+            rolling_sum_sq += values[i] ** 2
+            result[i] = np.nan  # Not enough data points
+        else:
+            rolling_sum += values[i] - values[i - window]
+            rolling_sum_sq += values[i] ** 2 - values[i - window] ** 2
+            mean = rolling_sum / window
+            std = np.sqrt((rolling_sum_sq / window) - mean ** 2)
+            result[i] = std
+
+    return result
+
+@njit
+def rolling_standardize_numba(column, window=40):
+    """
+    Perform a rolling standardization on the given column using Numba.
+    """
+    result = np.empty(len(column))
+    rolling_sum = 0.0
+    rolling_sum_sq = 0.0
+
+    for i in range(len(column)):
+        if i < window:
+            # Accumulate rolling sums for the initial window
+            rolling_sum += column[i]
+            rolling_sum_sq += column[i] ** 2
+            result[i] = np.nan  # Not enough data points
+        else:
+            # Update rolling sums
+            rolling_sum += column[i] - column[i - window]
+            rolling_sum_sq += column[i] ** 2 - column[i - window] ** 2
+            rolling_mean = rolling_sum / window
+            rolling_std = np.sqrt((rolling_sum_sq / window) - rolling_mean ** 2)
+            
+            # Handle division by zero
+            if rolling_std == 0:
+                result[i] = 0
+            else:
+                result[i] = (column[i] - rolling_mean) / rolling_std
+
+    return result
+
+
+def rolling_standardize(column, window=40):
     """
     Perform a rolling standardization on the given column using Pandas.
     
