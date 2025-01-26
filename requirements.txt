@@ -1,2 +1,7 @@
-numpy
-numba
+numpy<2.1
+matplotlib<3.10
+scipy<1.14
+pandas<2.3
+seaborn
+random
+requests

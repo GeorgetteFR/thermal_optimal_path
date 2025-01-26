@@ -1,6 +1,6 @@
 from thermal_optimal_path.lattice import *
 from thermal_optimal_path.statistics import *
-from notebooks.helpers import *
+from submission.helpers import *
 import sys
 import os
 import pandas as pd
