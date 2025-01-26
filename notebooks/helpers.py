@@ -106,6 +106,9 @@ def rolling_standardize(column, window=40):
     result = (column - rolling_mean) / rolling_std
     return result.to_numpy()  # Convert the result back to a NumPy array
 
+@njit
+def weighted_average(values, weights):
+    return np.dot(values, weights)
 
 
 def plot_lead_lag(df_avg):
